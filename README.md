@@ -18,3 +18,4 @@ Yukino Pet 独立桌宠
 这是 Windows 便携版；不连接 ChatGPT，因此不会自动显示聊天任务状态。
 
 程序由本机直接编译，没有商业代码签名证书。若 Windows SmartScreen 显示“未知发布者”，可在确认压缩包来源无误后选择“更多信息 → 仍要运行”。
+<img width="192" height="208" alt="image" src="https://github.com/user-attachments/assets/88241ae2-22d1-4534-ab2a-1655037c68cb" />
