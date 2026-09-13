@@ -2,7 +2,7 @@ Yukino Pet 独立桌宠
 
 以《我的青春恋爱物语果然有问题。》中的雪之下雪乃为灵感制作的 Windows Q 版桌面宠物。
 
-无需启动 ChatGPT 或 Codex，也不需要联网。下载后双击 `YukinoPet.exe` 即可运行。
+下载请移步右侧Release
 
 ## 下载
 
