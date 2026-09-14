@@ -8,8 +8,8 @@
 
 ## 下载
 
-- [下载 YukinoPet v2.1.2 单文件 EXE](https://github.com/fqxxzyw/yukino_desktop_pet/releases/download/v1.0.0/YukinoPet-v2.1.2.exe)：角色素材、2391 条语音和音频解码组件均已嵌入。
-- [下载 YukinoPet v2.1.2 完整压缩包](https://github.com/fqxxzyw/yukino_desktop_pet/releases/download/v1.0.0/YukinoPet-Standalone-v2.1.2.zip)：包含 EXE、可编辑语录、使用说明和第三方许可说明。
+- [下载 YukinoPet v2.1.3 单文件 EXE](https://github.com/fqxxzyw/yukino_desktop_pet/releases/download/v1.0.0/YukinoPet-v2.1.3.exe)：角色素材、2391 条语音和音频解码组件均已嵌入。
+- [下载 YukinoPet v2.1.3 完整压缩包](https://github.com/fqxxzyw/yukino_desktop_pet/releases/download/v1.0.0/YukinoPet-Standalone-v2.1.3.zip)：包含 EXE、可编辑语录、使用说明和第三方许可说明。
 - [下载 VPet Simulator 适配包](https://github.com/fqxxzyw/yukino_desktop_pet/releases/download/v1.0.0/YukinoVPet-v2.1.2.zip)：用于 Steam《虚拟桌宠模拟器》。
 
 当前版本：**2.1.2**
