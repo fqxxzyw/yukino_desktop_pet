@@ -4,7 +4,7 @@
 
 下载后双击 `YukinoPet.exe` 即可运行。
 
-> **仓库首页不再存放 EXE 或压缩包。请前往 [Releases 下载页面](https://github.com/fqxxzyw/yukino_desktop_pet/releases/tag/v1.0.0) 下载可运行版本。** GitHub 自动生成的 `Source code` 压缩包只是源代码，不是桌宠安装包。
+> **请前往 [Releases 下载页面](https://github.com/fqxxzyw/yukino_desktop_pet/releases/tag/v1.0.0) 下载可运行版本。** GitHub 自动生成的 `Source code` 压缩包只是源代码，不是桌宠安装包。
 
 ## 下载
 
