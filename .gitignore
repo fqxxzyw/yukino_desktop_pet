@@ -1,0 +1,9 @@
+.vs/
+bin/
+obj/
+dist/
+*.user
+*.suo
+*.pdb
+*.tmp
+src/YukinoPet/*.exe

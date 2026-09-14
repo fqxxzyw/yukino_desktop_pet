@@ -16,6 +16,10 @@
 
 需要回退时，可前往单独的 [“旧版本” Release](https://github.com/fqxxzyw/yukino_desktop_pet/releases/tag/old-versions)。其中的文件仅供存档，首次下载请使用上面的 v2.1.2。
 
+## 源代码
+
+打包前的完整可编译工程位于 [`src/YukinoPet`](src/YukinoPet)。源码、最终动画素材、依赖库、可编辑语录和内嵌语音资源均保存在仓库中；编译方法见该目录的说明。源代码不会放入 Release。
+
 ## 主要功能
 
 - 真正的左右慢走动画，不是将跑步动画减速播放。
