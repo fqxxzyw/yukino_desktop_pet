@@ -4,7 +4,7 @@
 
 无需启动 ChatGPT 或 Codex，也不需要联网。下载后双击 `YukinoPet.exe` 即可运行。
 
-下载请移步右侧 **Releases**，或使用下面的直接下载链接。
+> **仓库首页不再存放 EXE 或压缩包。请前往 [Releases 下载页面](https://github.com/fqxxzyw/yukino_desktop_pet/releases/tag/v1.0.0) 下载可运行版本。** GitHub 自动生成的 `Source code` 压缩包只是源代码，不是桌宠安装包。
 
 ## 下载
 
@@ -13,6 +13,8 @@
 - [下载 VPet Simulator 适配包](https://github.com/fqxxzyw/yukino_desktop_pet/releases/download/v1.0.0/YukinoVPet-v2.1.2.zip)：用于 Steam《虚拟桌宠模拟器》。
 
 当前版本：**2.1.2**
+
+需要回退时，可前往单独的 [“旧版本” Release](https://github.com/fqxxzyw/yukino_desktop_pet/releases/tag/old-versions)。其中的文件仅供存档，首次下载请使用上面的 v2.1.2。
 
 ## 主要功能
 
