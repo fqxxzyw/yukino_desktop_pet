@@ -15,6 +15,8 @@ namespace YukinoPet
         private const int WsExNoActivate = 0x08000000;
 
         private readonly TextBlock textBlock;
+        private readonly Border border;
+        private double scale = 1;
         private double elapsed;
         private double visibleDuration;
         private double fadeInDuration;
@@ -36,7 +38,9 @@ namespace YukinoPet
             ShowInTaskbar = false;
             ShowActivated = false;
             Topmost = true;
-            SizeToContent = SizeToContent.WidthAndHeight;
+            SizeToContent = SizeToContent.Manual;
+            Width = 320;
+            Height = 128;
             IsHitTestVisible = false;
             Opacity = 0;
 
@@ -46,16 +50,18 @@ namespace YukinoPet
                 FontFamily = new FontFamily("Microsoft YaHei UI"),
                 FontSize = 14,
                 TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 280,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
                 LineHeight = 22
             };
 
-            Border border = new Border
+            border = new Border
             {
                 Background = new SolidColorBrush(Color.FromArgb(238, 250, 252, 255)),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(145, 121, 137, 169)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(13),
+                ClipToBounds = true,
                 Padding = new Thickness(14, 10, 14, 10),
                 Child = textBlock,
                 Effect = new DropShadowEffect
@@ -84,18 +90,18 @@ namespace YukinoPet
         {
             if (IsSpeaking && priority < currentPriority) return false;
             textBlock.Text = text;
-            textBlock.FontSize = 14 * bubbleScale;
-            textBlock.MaxWidth = 280 * bubbleScale;
+            scale = Math.Max(0.6, Math.Min(2, bubbleScale));
+            textBlock.FontSize = 14 * scale;
+            textBlock.LineHeight = 22 * scale;
+            border.Padding = new Thickness(14 * scale, 10 * scale, 14 * scale, 10 * scale);
             fadeInDuration = 0.20;
             fadeOutDuration = 0.38;
             visibleDuration = Math.Max(1.6, Math.Min(6.5, 1.35 + text.Length * 0.105));
             elapsed = 0;
             currentPriority = priority;
             Opacity = 0;
-            if (!IsVisible) Show();
-            Measure(new Size(Double.PositiveInfinity, Double.PositiveInfinity));
-            Arrange(new Rect(DesiredSize));
             PositionNear(petBounds, workArea, 8);
+            if (!IsVisible) Show();
             return true;
         }
 
@@ -143,19 +149,14 @@ namespace YukinoPet
 
         private void PositionNear(Rect pet, Rect area, double verticalOffset)
         {
-            double width = ActualWidth > 1 ? ActualWidth : DesiredSize.Width;
-            double height = ActualHeight > 1 ? ActualHeight : DesiredSize.Height;
-            double x;
-            if (pet.Left < area.Left + 310) x = pet.Right - Math.Min(24, pet.Width * 0.12);
-            else if (pet.Right > area.Right - 310) x = pet.Left - width + Math.Min(24, pet.Width * 0.12);
-            else x = pet.Left + (pet.Width - width) / 2;
-
-            double y = pet.Top - height - 10 - verticalOffset;
-            if (y < area.Top + 4) y = pet.Bottom + 8 + verticalOffset;
-            x = Math.Max(area.Left + 4, Math.Min(x, area.Right - width - 4));
-            y = Math.Max(area.Top + 4, Math.Min(y, area.Bottom - height - 4));
-            Left = x;
-            Top = y;
+            // Quote length never changes the frame. Only user scale or a very
+            // small work area can change its dimensions.
+            Size size = WindowPlacement.Fit(new Size(320 * scale, 128 * scale), area, 4);
+            if (Width != size.Width) Width = size.Width;
+            if (Height != size.Height) Height = size.Height;
+            Point position = WindowPlacement.PlaceOverlay(pet, size, area, 12 + Math.Max(0, verticalOffset), false);
+            Left = position.X;
+            Top = position.Y;
         }
 
         private static double Smooth(double value)

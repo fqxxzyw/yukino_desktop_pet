@@ -1,0 +1,31 @@
+name: Windows source validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Run regression and WPF bubble-layout tests
+        shell: powershell
+        run: .\tests\run-tests.ps1
+      - name: Compile standalone EXE from source
+        shell: powershell
+        run: .\src\YukinoPet\build.ps1
+      - name: Save validation build (not a release)
+        uses: actions/upload-artifact@v7
+        with:
+          name: YukinoPet-validation-${{ github.sha }}
+          path: src/YukinoPet/dist/
+          retention-days: 7
+          if-no-files-found: error

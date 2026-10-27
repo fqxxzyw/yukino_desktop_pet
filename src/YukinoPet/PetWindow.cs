@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -41,6 +42,7 @@ namespace YukinoPet
         private readonly Forms.NotifyIcon trayIcon;
 
         private double previousSeconds;
+        private TimeSpan previousRenderTime = TimeSpan.MinValue;
         private double walkTargetX;
         private double walkTargetY;
         private double walkSpeed;
@@ -55,10 +57,13 @@ namespace YukinoPet
         private bool closing;
         private bool mouseDown;
         private bool dragging;
+        private bool contextMenuOpen;
         private bool headPatCandidate;
         private bool headPatRecognized;
         private Point mouseDownScreen;
-        private Point dragWindowOrigin;
+        private Point dragGrabOffset;
+        private double gestureScaleX;
+        private double gestureScaleY;
         private Point lastPatPoint;
         private int patReversals;
         private int patDirection;
@@ -75,7 +80,7 @@ namespace YukinoPet
         public bool IsWalking { get { return walking; } }
         public bool IsSitting { get { return sitting; } }
         public bool IsBubbleVisible { get { return bubble.IsSpeaking; } }
-        public bool IsUserBusy { get { return mouseDown || dragging || headPatRecognized; } }
+        public bool IsUserBusy { get { return mouseDown || dragging || headPatRecognized || contextMenuOpen; } }
         public bool IsFocusActive { get { return focusEnds > DateTime.Now || pendingPomodoro; } }
         public bool HasBlockingAnimation { get { return animation.IsOneShotPlaying && animation.CurrentPriority >= 70; } }
         public PetBehaviorState BehaviorState { get { return behaviorState; } }
@@ -119,7 +124,9 @@ namespace YukinoPet
             MouseLeftButtonDown += OnMouseLeftButtonDown;
             MouseMove += OnMouseMove;
             MouseLeftButtonUp += OnMouseLeftButtonUp;
+            LostMouseCapture += OnLostMouseCapture;
             MouseRightButtonUp += OnMouseRightButtonUp;
+            IsVisibleChanged += delegate { if (!IsVisible) { CompletePointerInteraction(true); bubble.Hide(); } };
             CompositionTarget.Rendering += OnRendering;
 
             trayIcon = CreateTrayIcon();
@@ -149,7 +156,7 @@ namespace YukinoPet
                 { "landing", new AnimationClip("landing", 4, 3, 2, new[] { 95, 210 }, false, 95, false, 0, 0) },
                 { "annoyed", new AnimationClip("annoyed", 5, 0, 6, new[] { 140, 120, 180, 150, 190, 270 }, false, 75, false, 0, 0) },
                 { "waiting", new AnimationClip("waiting", 6, 0, 6, new[] { 240, 210, 260, 230, 300, 420 }, false, 35, true, 0, 0) },
-                { "run", new AnimationClip("run", 7, 0, 8, new[] { 88, 76, 76, 102, 88, 76, 76, 102 }, true, 45, true, 0, 0) },
+                { "run", new AnimationClip("run", 7, 0, 6, new[] { 88, 76, 76, 102, 88, 76 }, true, 45, true, 0, 0) },
                 { "review", new AnimationClip("review", 8, 0, 6, new[] { 260, 310, 350, 280, 320, 520 }, false, 30, true, 0, 0) },
                 { "head-tilt", new AnimationClip("head-tilt", 8, 0, 6, new[] { 150, 180, 260, 700, 180, 220 }, false, 65, false, 0, 0) },
                 { "sitting", new AnimationClip("sitting", 6, 0, 6, new[] { 280, 240, 330, 270, 360, 480 }, true, 55, true, 0, 0) },
@@ -160,17 +167,26 @@ namespace YukinoPet
 
         private void OnRendering(object sender, EventArgs e)
         {
+            RenderingEventArgs rendering = e as RenderingEventArgs;
+            if (rendering != null)
+            {
+                if (rendering.RenderingTime == previousRenderTime) return;
+                previousRenderTime = rendering.RenderingTime;
+            }
             double nowSeconds = clock.Elapsed.TotalSeconds;
-            double elapsed = Math.Max(0, Math.Min(0.12, nowSeconds - previousSeconds));
+            double animationElapsed = Math.Max(0, nowSeconds - previousSeconds);
+            // Movement/behavior remains bounded after suspend; sprite playback
+            // receives actual elapsed time and applies its own catch-up limit.
+            double elapsed = Math.Min(0.12, animationElapsed);
             previousSeconds = nowSeconds;
 
             UpdateSitting(elapsed);
             behavior.Update(this, elapsed, DateTime.Now);
             bool lookChanged = look.Update(elapsed);
-            bool frameChanged = animation.Update(elapsed, Settings.AnimationPaused);
+            bool frameChanged = animation.Update(animationElapsed, Settings.AnimationPaused);
             UpdateFocusTimer();
             ProcessPendingPomodoro();
-            bubble.Update(elapsed, GetPetBounds(), GetCurrentWorkArea());
+            if (bubble.IsVisible) bubble.Update(elapsed, GetPetBounds(), GetCurrentWorkArea());
 
             if (!Settings.AnimationPaused && !dragging && !walking && animation.CurrentName == "idle")
             {
@@ -196,6 +212,7 @@ namespace YukinoPet
         private void ProcessPendingPomodoro()
         {
             if (!pendingPomodoro || DateTime.Now < pomodoroReadyAt) return;
+            if (IsUserBusy) return;
             if (behaviorState == PetBehaviorState.Dragging || behaviorState == PetBehaviorState.Greeting || behaviorState == PetBehaviorState.Interaction || behaviorState == PetBehaviorState.HeadTilt || behaviorState == PetBehaviorState.Sitting || behaviorState == PetBehaviorState.Talking) return;
             pendingPomodoro = false;
             StopMovement();
@@ -356,11 +373,8 @@ namespace YukinoPet
         public Point GetCursorPositionDip()
         {
             System.Drawing.Point pixel = Forms.Cursor.Position;
-            Point point = new Point(pixel.X, pixel.Y);
-            HwndSource source = PresentationSource.FromVisual(this) as HwndSource;
-            if (source != null && source.CompositionTarget != null)
-                point = source.CompositionTarget.TransformFromDevice.Transform(point);
-            return point;
+            Point local = PointFromScreen(new Point(pixel.X, pixel.Y));
+            return new Point(Left + local.X, Top + local.Y);
         }
 
         public void AimAt(Point cursor)
@@ -373,11 +387,18 @@ namespace YukinoPet
 
         public Rect GetCurrentWorkArea()
         {
-            if (Forms.Screen.AllScreens.Length == 1)
-                return SystemParameters.WorkArea;
-            System.Drawing.Point center = new System.Drawing.Point((int)((Left + Width / 2) * DeviceScaleX()), (int)((Top + Height / 2) * DeviceScaleY()));
-            if (Double.IsNaN(Left) || Double.IsNaN(Top)) center = Forms.Cursor.Position;
+            bool hasPosition = !Double.IsNaN(Left) && !Double.IsNaN(Top) && PresentationSource.FromVisual(this) != null;
+            Point screenCenter = hasPosition ? PointToScreen(new Point(Width / 2, Height / 2)) : new Point(Forms.Cursor.Position.X, Forms.Cursor.Position.Y);
+            System.Drawing.Point center = new System.Drawing.Point((int)Math.Round(screenCenter.X), (int)Math.Round(screenCenter.Y));
             System.Drawing.Rectangle wa = Forms.Screen.FromPoint(center).WorkingArea;
+            if (hasPosition)
+            {
+                // Convert relative to the actual HWND, not by multiplying the
+                // virtual desktop origin by the current monitor's DPI scale.
+                Point topLeft = PointFromScreen(new Point(wa.Left, wa.Top));
+                Point bottomRight = PointFromScreen(new Point(wa.Right, wa.Bottom));
+                return new Rect(Left + topLeft.X, Top + topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
+            }
             return new Rect(wa.Left / DeviceScaleX(), wa.Top / DeviceScaleY(), wa.Width / DeviceScaleX(), wa.Height / DeviceScaleY());
         }
 
@@ -398,33 +419,38 @@ namespace YukinoPet
             dragging = false;
             headPatRecognized = false;
             mouseDownAt = DateTime.Now;
-            mouseDownScreen = GetCursorPositionDip();
-            dragWindowOrigin = new Point(Left, Top);
+            System.Drawing.Point pixel = Forms.Cursor.Position;
+            mouseDownScreen = new Point(pixel.X, pixel.Y);
+            gestureScaleX = DeviceScaleX();
+            gestureScaleY = DeviceScaleY();
             Point local = e.GetPosition(this);
+            dragGrabOffset = local;
             headPatCandidate = local.Y <= Height * 0.42;
             lastPatPoint = mouseDownScreen;
             patReversals = 0;
             patDirection = 0;
-            CaptureMouse();
+            if (!CaptureMouse()) CompletePointerInteraction(true);
             e.Handled = true;
         }
 
         private void OnMouseMove(object sender, MouseEventArgs e)
         {
-            if (!mouseDown || e.LeftButton != MouseButtonState.Pressed) return;
-            Point current = GetCursorPositionDip();
-            double dx = current.X - mouseDownScreen.X;
-            double dy = current.Y - mouseDownScreen.Y;
+            if (!mouseDown) return;
+            if (e.LeftButton != MouseButtonState.Pressed) { CompletePointerInteraction(true); return; }
+            System.Drawing.Point pixel = Forms.Cursor.Position;
+            Point current = new Point(pixel.X, pixel.Y);
+            double dx = (current.X - mouseDownScreen.X) / gestureScaleX;
+            double dy = (current.Y - mouseDownScreen.Y) / gestureScaleY;
             double distance = Math.Sqrt(dx * dx + dy * dy);
 
             if (headPatCandidate && !dragging)
             {
-                double segment = current.X - lastPatPoint.X;
+                double segment = (current.X - lastPatPoint.X) / gestureScaleX;
                 int direction = Math.Abs(segment) >= 2 ? Math.Sign(segment) : 0;
-                if (direction != 0 && patDirection != 0 && direction != patDirection && Math.Abs(current.Y - mouseDownScreen.Y) < 22) patReversals++;
+                if (direction != 0 && patDirection != 0 && direction != patDirection && Math.Abs(dy) < 22) patReversals++;
                 if (direction != 0) patDirection = direction;
                 lastPatPoint = current;
-                if (patReversals >= 3 && (DateTime.Now - mouseDownAt).TotalMilliseconds >= 550)
+                if (!headPatRecognized && patReversals >= 3 && (DateTime.Now - mouseDownAt).TotalMilliseconds >= 550)
                 {
                     headPatRecognized = true;
                     SetBehaviorState(PetBehaviorState.Interaction);
@@ -433,7 +459,7 @@ namespace YukinoPet
                 if (!headPatRecognized && (Math.Abs(dy) > 28 || distance > 46)) headPatCandidate = false;
             }
 
-            if (!headPatCandidate && !headPatRecognized && (distance > 7 || (DateTime.Now - mouseDownAt).TotalMilliseconds > 180))
+            if (!dragging && !headPatCandidate && !headPatRecognized && (distance > 7 || (DateTime.Now - mouseDownAt).TotalMilliseconds > 180))
             {
                 dragging = true;
                 SetBehaviorState(PetBehaviorState.Dragging);
@@ -442,38 +468,56 @@ namespace YukinoPet
             }
             if (dragging)
             {
-                Left = dragWindowOrigin.X + dx;
-                Top = dragWindowOrigin.Y + dy;
+                // Keep the grabbed local point under the cursor. Recomputing
+                // against the HWND avoids stale screen-DIP origins after DPI
+                // changes, and never carries a previous drag's work area.
+                Point local = PointFromScreen(current);
+                Point position = WindowPlacement.DragPosition(new Point(Left, Top), local, dragGrabOffset);
+                Left = position.X;
+                Top = position.Y;
             }
         }
 
         private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             if (!mouseDown) return;
-            ReleaseMouseCapture();
+            CompletePointerInteraction(false);
+            e.Handled = true;
+        }
+
+        private void OnLostMouseCapture(object sender, MouseEventArgs e)
+        {
+            if (mouseDown && !IsMouseCaptured) CompletePointerInteraction(true);
+        }
+
+        private void CompletePointerInteraction(bool cancelled)
+        {
+            if (!mouseDown) return;
+            bool wasDragging = dragging;
+            bool wasHeadPat = headPatRecognized;
+            // Reset before releasing capture: LostMouseCapture is synchronous.
             mouseDown = false;
-            if (dragging)
+            dragging = false;
+            headPatRecognized = false;
+            headPatCandidate = false;
+            if (IsMouseCaptured) ReleaseMouseCapture();
+            if (wasDragging)
             {
-                dragging = false;
                 ClampToVisibleArea();
                 character.RegisterInteraction(0, 0, 1.5);
                 SetBehaviorState(PetBehaviorState.Interaction);
                 PlayAnimation("landing", true, FinishInteraction);
-                if (random.NextDouble() < 0.28) RequestQuote(QuoteTrigger.Click, false);
+                if (!cancelled && random.NextDouble() < 0.28) RequestQuote(QuoteTrigger.Click, false);
             }
-            else if (headPatRecognized)
+            else if (!cancelled && wasHeadPat)
             {
-                headPatRecognized = false;
                 character.RegisterInteraction(0.7, 0.5, -1.3);
                 RequestQuote(QuoteTrigger.HeadPat, true);
                 FinishInteraction();
             }
-            else RegisterClick();
-            headPatCandidate = false;
-            Settings.Left = Left;
-            Settings.Top = Top;
-            Settings.Save();
-            e.Handled = true;
+            else if (!cancelled) RegisterClick();
+            else FinishInteraction();
+            SaveSettings();
         }
 
         private void RegisterClick()
@@ -510,7 +554,21 @@ namespace YukinoPet
 
         private void OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
         {
+            CompletePointerInteraction(true);
+            behavior.Interrupt(this);
+            bubble.Hide();
             ContextMenu menu = BuildContextMenu();
+            menu.PlacementTarget = this;
+            menu.Placement = PlacementMode.Custom;
+            menu.MaxHeight = Math.Max(1, GetCurrentWorkArea().Height - 8);
+            menu.MaxWidth = Math.Max(1, GetCurrentWorkArea().Width - 8);
+            menu.CustomPopupPlacementCallback = delegate(Size popupSize, Size targetSize, Point offset)
+            {
+                Point position = WindowPlacement.PlaceOverlay(GetPetBounds(), popupSize, GetCurrentWorkArea(), 12, true);
+                return new[] { new CustomPopupPlacement(new Point(position.X - Left, position.Y - Top), PopupPrimaryAxis.None) };
+            };
+            contextMenuOpen = true;
+            menu.Closed += delegate { contextMenuOpen = false; };
             menu.IsOpen = true;
             e.Handled = true;
         }
@@ -658,8 +716,9 @@ namespace YukinoPet
 
         private void ClampPositionToArea(Rect area)
         {
-            Left = Math.Max(area.Left, Math.Min(Left, area.Right - Width));
-            Top = Math.Max(area.Top, Math.Min(Top, area.Bottom - Height));
+            Point bounded = WindowPlacement.Clamp(new Point(Left, Top), new Size(Width, Height), area, 0);
+            Left = bounded.X;
+            Top = bounded.Y;
         }
 
         private Rect GetPetBounds() { return new Rect(Left, Top, Width, Height); }

@@ -78,9 +78,13 @@ namespace YukinoPet
         public bool Update(double elapsedSeconds, bool paused)
         {
             if (paused) return ConsumeChanged();
-            elapsedInFrameMs += Math.Max(0, Math.Min(0.12, elapsedSeconds)) * 1000.0;
+            // Catch up after ordinary missed renders instead of slowing the
+            // authored timeline to 120 ms per callback. Cap suspend/debugger
+            // gaps at one second so resuming cannot run an unbounded loop.
+            if (Double.IsNaN(elapsedSeconds) || Double.IsInfinity(elapsedSeconds)) elapsedSeconds = 0;
+            elapsedInFrameMs += Math.Max(0, Math.Min(1.0, elapsedSeconds)) * 1000.0;
             int safety = 0;
-            while (elapsedInFrameMs >= currentFrameDurationMs && safety++ < 12)
+            while (elapsedInFrameMs >= currentFrameDurationMs && safety++ < 64)
             {
                 elapsedInFrameMs -= currentFrameDurationMs;
                 frame++;
